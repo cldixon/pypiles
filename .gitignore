@@ -12,3 +12,8 @@ wheels/
 .venv
 logs/
 data/
+
+# Frontend
+frontend/node_modules/
+frontend/build/
+frontend/.svelte-kit/

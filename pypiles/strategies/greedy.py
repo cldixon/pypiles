@@ -89,7 +89,7 @@ class GreedySwapper:
             elif player_pile_status["state"] == "2-1-1":
                 # see if max item in center pile; if not, check for either of count-1 cards
 
-                # check for max, count-1 card match in center pile
+                # check for max item match in center pile
                 if player_pile_status["max_item"] in center_pile_status["groups"]:
                     item_match = player_pile_status["max_item"]
                     position, target_card = center_pile_status["groups"][item_match][0]
@@ -132,9 +132,26 @@ class GreedySwapper:
                                 swap=(pile_idx, swap_idx, swap_card),
                             )
 
+                    # fallback: no matching items found in center pile,
+                    # swap a minority card to shake up the center pile
+                    assert isinstance(player_pile_status["max_item"], str)
+                    minority_items = [
+                        group_cards
+                        for other_item, group_cards in player_pile_status["groups"].items()
+                        if other_item != player_pile_status["max_item"]
+                    ]
+                    minority_cards = [c for sublist in minority_items for c in sublist]
+                    swap_idx, swap_card = random.choice(minority_cards)
+                    position = random.randint(0, (len(center_pile) - 1))
+                    target_card = center_pile[position]
+                    return SwapRequest(
+                        target=(position, target_card),
+                        swap=(pile_idx, swap_idx, swap_card),
+                    )
+
             elif player_pile_status["state"] == "3-1":
-                # then pile item counts are like 2, 1, 1
-                # get singular item with count of 2 and look for match in pile
+                # pile has 3 of one item and 1 of another
+                # look for the max item in the center pile
                 if player_pile_status["max_item"] in center_pile_status["groups"]:
                     # identify center pile position/card to target
                     item_match = player_pile_status["max_item"]
@@ -151,6 +168,22 @@ class GreedySwapper:
                     other_cards = [i for sublist in other_item_groups for i in sublist]
                     # take random card from one of the other item groups
                     swap_idx, swap_card = random.choice(other_cards)
+                    return SwapRequest(
+                        target=(position, target_card),
+                        swap=(pile_idx, swap_idx, swap_card),
+                    )
+                else:
+                    # fallback: swap the minority card to change center pile composition
+                    assert isinstance(player_pile_status["max_item"], str)
+                    minority_items = [
+                        group_cards
+                        for other_item, group_cards in player_pile_status["groups"].items()
+                        if other_item != player_pile_status["max_item"]
+                    ]
+                    minority_cards = [c for sublist in minority_items for c in sublist]
+                    swap_idx, swap_card = random.choice(minority_cards)
+                    position = random.randint(0, (len(center_pile) - 1))
+                    target_card = center_pile[position]
                     return SwapRequest(
                         target=(position, target_card),
                         swap=(pile_idx, swap_idx, swap_card),

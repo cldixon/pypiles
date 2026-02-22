@@ -36,12 +36,14 @@ class Player:
         strategy: SwapStrategy,
         id: str | None = None,
         log_file: Path | str | None = None,
+        event_collector: ray.actor.ActorHandle | None = None,
     ):
         self.cards = cards
         self.completed = []
         self.strategy = strategy
         self.metrics = initialize_activity_metrics()
         self.id = id if id is not None else "P0"
+        self.event_collector = event_collector
 
         self.logger = setup_logger(name=f"({self.id})", log_file=log_file)
 
@@ -82,6 +84,19 @@ class Player:
                 self.logger.info(
                     f"REQUEST | player card {str(swap_request['swap'][2])} for (CP) card {str(swap_request['target'][1])}"
                 )
+                if self.event_collector:
+                    self.event_collector.push_event.remote(
+                        event_type="swap_requested",
+                        actor=self.id,
+                        data={
+                            "player_id": self.id,
+                            "pile_idx": swap_request["swap"][0],
+                            "card_idx": swap_request["swap"][1],
+                            "swap_card": swap_request["swap"][2].id,
+                            "target_position": swap_request["target"][0],
+                            "target_card": swap_request["target"][1].id,
+                        },
+                    )
 
                 success, new_card = ray.get(
                     center_pile.swap_card.remote(
@@ -97,6 +112,19 @@ class Player:
                     self.logger.info(
                         f"SWAP | added {str(new_card)} @ Pos[{swap_request['swap'][0]}, {swap_request['swap'][1]}] and sent {str(swap_request['swap'][2])} to (CP)"
                     )
+                    if self.event_collector:
+                        self.event_collector.push_event.remote(
+                            event_type="swap_succeeded",
+                            actor=self.id,
+                            data={
+                                "player_id": self.id,
+                                "pile_idx": swap_request["swap"][0],
+                                "card_idx": swap_request["swap"][1],
+                                "sent_card": swap_request["swap"][2].id,
+                                "received_card": new_card.id,
+                                "target_position": swap_request["target"][0],
+                            },
+                        )
                     self.metrics["num_swaps"] += 1
                     self.update_card(
                         pile_idx=swap_request["swap"][0],
@@ -112,10 +140,38 @@ class Player:
                         self.logger.info(
                             f"({self.id}) completed pile @ Pos[{swap_request['swap'][0]}]"
                         )
+                        if self.event_collector:
+                            self.event_collector.push_event.remote(
+                                event_type="pile_completed",
+                                actor=self.id,
+                                data={
+                                    "player_id": self.id,
+                                    "pile_idx": swap_request["swap"][0],
+                                    "pile_cards": [c.id for c in pile_cards],
+                                    "score": len(self.completed) + 1,
+                                },
+                            )
                         self.completed.append(pile_cards)
                         self.cards.pop(swap_request["swap"][0])
+                else:
+                    if self.event_collector:
+                        self.event_collector.push_event.remote(
+                            event_type="swap_failed",
+                            actor=self.id,
+                            data={
+                                "player_id": self.id,
+                                "target_position": swap_request["target"][0],
+                                "target_card": swap_request["target"][1].id,
+                            },
+                        )
             else:
                 self.logger.info(f"({self.id}) did not generate a swap request")
+                if self.event_collector:
+                    self.event_collector.push_event.remote(
+                        event_type="player_no_swap",
+                        actor=self.id,
+                        data={"player_id": self.id},
+                    )
 
             if len(self.completed) >= 1:
                 victory = ray.get(
@@ -123,7 +179,23 @@ class Player:
                 )
                 if victory:
                     self.logger.info(f"{self.id}: Yay! We have won!")
+                    if self.event_collector:
+                        self.event_collector.push_event.remote(
+                            event_type="game_won",
+                            actor=self.id,
+                            data={
+                                "player_id": self.id,
+                                "score": len(self.completed),
+                            },
+                        )
                     return
+
+    def get_initial_state(self) -> dict:
+        return {
+            "id": self.id,
+            "piles": [[card.id for card in pile] for pile in self.cards],
+            "num_piles": len(self.cards),
+        }
 
     def get_player_state(self) -> PlayerState:
         return PlayerState(
