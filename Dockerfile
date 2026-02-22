@@ -24,8 +24,9 @@ RUN uv sync --frozen --no-dev
 # Copy built frontend
 COPY --from=frontend-build /app/frontend/build ./frontend/build
 
-# Expose port
+# Railway assigns $PORT dynamically; default to 8000 for local use
+ENV PORT=8000
 EXPOSE 8000
 
-# Start FastAPI with uvicorn
-CMD ["uv", "run", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start FastAPI with uvicorn, using shell form so $PORT is expanded
+CMD uv run uvicorn server:app --host 0.0.0.0 --port $PORT
