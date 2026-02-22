@@ -8,11 +8,12 @@
 	import EventLog from '$lib/components/game/EventLog.svelte';
 	import PlaybackControls from '$lib/components/game/PlaybackControls.svelte';
 
-	const gameId = $derived(page.params.id);
+	const gameId = $derived(page.params.id ?? '');
+
 	let ws: GameWebSocket | null = $state(null);
 	let paused = $state(false);
 	let speed = $state(1.0);
-	let state = $state<GameState>({
+	let gameState: GameState = $state({
 		phase: 'connecting',
 		setup: null,
 		events: [],
@@ -30,7 +31,7 @@
 
 	onMount(() => {
 		gameStore.reset();
-		unsubscribe = gameStore.subscribe((v) => { state = v; });
+		unsubscribe = gameStore.subscribe((v) => { gameState = v; });
 		ws = new GameWebSocket(gameId);
 		ws.connect();
 	});
@@ -68,21 +69,21 @@
 	<title>PyPiles - Game {gameId.slice(0, 8)}</title>
 </svelte:head>
 
-{#if state.phase === 'connecting'}
+{#if gameState.phase === 'connecting'}
 	<div class="status-page">
 		<div class="spinner"></div>
 		<p>Connecting to game...</p>
 	</div>
-{:else if state.phase === 'error'}
+{:else if gameState.phase === 'error'}
 	<div class="status-page">
 		<h2>Error</h2>
-		<p class="error">{state.error}</p>
+		<p class="error">{gameState.error}</p>
 		<a href="/">Back to config</a>
 	</div>
-{:else if state.phase === 'setup'}
+{:else if gameState.phase === 'setup'}
 	<div class="status-page">
 		<h2>Game Ready</h2>
-		<p>{state.setup?.config.num_players} players, {state.setup?.total_events} events to replay</p>
+		<p>{gameState.setup?.config.num_players} players, {gameState.setup?.total_events} events to replay</p>
 		<p class="subtext">Starting playback...</p>
 	</div>
 {:else}
@@ -90,26 +91,26 @@
 	<div class="game-page">
 		<div class="game-header">
 			<h2>
-				{#if state.phase === 'complete'}
+				{#if gameState.phase === 'complete'}
 					Game Complete
-					{#if state.completion?.game_status.winner}
-						 - {state.completion.game_status.winner} Wins!
+					{#if gameState.completion?.game_status.winner}
+						 - {gameState.completion.game_status.winner} Wins!
 					{/if}
 				{:else}
 					Game In Progress
 				{/if}
 			</h2>
-			{#if state.phase === 'complete'}
+			{#if gameState.phase === 'complete'}
 				<button class="results-btn" onclick={viewResults}>View Results</button>
 			{/if}
 		</div>
 
 		<PlaybackControls
-			progress={state.progress}
+			progress={gameState.progress}
 			{paused}
 			{speed}
-			totalEvents={state.setup?.total_events || 0}
-			currentEvents={state.events.length}
+			totalEvents={gameState.setup?.total_events || 0}
+			currentEvents={gameState.events.length}
 			onPause={handlePause}
 			onResume={handleResume}
 			onSetSpeed={handleSetSpeed}
@@ -118,10 +119,10 @@
 
 		<div class="game-layout">
 			<div class="board-area">
-				<GameBoard {state} />
+				<GameBoard state={gameState} />
 			</div>
 			<div class="log-area">
-				<EventLog events={state.events} />
+				<EventLog events={gameState.events} />
 			</div>
 		</div>
 	</div>

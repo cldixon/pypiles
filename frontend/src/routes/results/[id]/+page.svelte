@@ -8,7 +8,7 @@
 	import GameSummaryCard from '$lib/components/results/GameSummaryCard.svelte';
 	import ActivityChart from '$lib/components/results/ActivityChart.svelte';
 
-	const gameId = $derived(page.params.id);
+	const gameId = $derived(page.params.id ?? '');
 
 	let loading = $state(true);
 	let error = $state('');
