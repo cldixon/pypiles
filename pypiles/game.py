@@ -63,8 +63,6 @@ class GameManager:
             if not ray.is_initialized():
                 ray.init(
                     ignore_reinit_error=True,
-                    # Use /tmp for object store in containers where /dev/shm is small
-                    _system_config={"object_store_memory": 100 * 1024 * 1024},
                     _temp_dir="/tmp/ray",
                 )
             self._ray_initialized = True
