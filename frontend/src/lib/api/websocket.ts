@@ -16,8 +16,17 @@ export class GameWebSocket {
 	}
 
 	connect() {
-		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const url = `${protocol}//${window.location.host}/ws/games/${this.gameId}`;
+		const apiBase = import.meta.env.VITE_API_URL || '';
+		let url: string;
+		if (apiBase) {
+			// Two-service deployment: derive WS URL from API base URL
+			const wsBase = apiBase.replace(/^http/, 'ws');
+			url = `${wsBase}/ws/games/${this.gameId}`;
+		} else {
+			// Local dev: same origin via Vite proxy
+			const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+			url = `${protocol}//${window.location.host}/ws/games/${this.gameId}`;
+		}
 		this.ws = new WebSocket(url);
 
 		this.ws.onmessage = (event) => {
