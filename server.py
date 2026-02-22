@@ -1,11 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from pypiles.game import STRATEGY_REGISTRY, GameConfig, GameManager
@@ -37,13 +33,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="PyPiles", lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 # --- REST endpoints ---
@@ -244,29 +233,3 @@ def _calc_duration(session) -> float:
             session.events[-1]["timestamp"] - session.events[0]["timestamp"]
         ) * 1000
     return 0.0
-
-
-# --- Static file serving (SvelteKit build) ---
-
-frontend_build_dir = Path(__file__).parent / "frontend" / "build"
-if frontend_build_dir.exists():
-    # Serve static assets (JS, CSS, etc.)
-    static_dir = frontend_build_dir / "_app"
-    if static_dir.exists():
-        app.mount(
-            "/_app",
-            StaticFiles(directory=str(static_dir)),
-            name="svelte_app",
-        )
-
-    @app.get("/{full_path:path}")
-    async def serve_frontend(full_path: str):
-        """Serve SvelteKit SPA for all non-API routes."""
-        file_path = frontend_build_dir / full_path
-        if file_path.exists() and file_path.is_file():
-            return FileResponse(str(file_path))
-        # SPA fallback
-        index = frontend_build_dir / "index.html"
-        if index.exists():
-            return FileResponse(str(index))
-        raise HTTPException(status_code=404, detail="Not found")
