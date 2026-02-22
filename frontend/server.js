@@ -1,6 +1,11 @@
+import dns from 'node:dns';
 import { createServer } from 'node:http';
 import { WebSocket, WebSocketServer } from 'ws';
 import { handler } from './build/handler.js';
+
+// Railway private networking uses IPv6 only.
+// Node.js defaults to preferring IPv4, which causes connection failures.
+dns.setDefaultResultOrder('verbatim');
 
 const API_INTERNAL_URL = (process.env.API_INTERNAL_URL || 'http://127.0.0.1:8000').trim();
 const PORT = process.env.PORT || 3000;
