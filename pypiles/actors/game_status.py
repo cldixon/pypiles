@@ -16,12 +16,17 @@ class GameStatusState(TypedDict):
 
 @ray.remote
 class GameStatus:
-    def __init__(self, winning_score: int):
+    def __init__(
+        self,
+        winning_score: int,
+        event_collector: ray.actor.ActorHandle | None = None,
+    ):
         self.winning_score = winning_score
         self.active = True
         self.start_time = time.time()
         self.end_time = None
         self.winner = None
+        self.event_collector = event_collector
 
     def is_active(self) -> bool:
         return self.active
@@ -34,6 +39,18 @@ class GameStatus:
             self.active = False
             self.end_time = time.time()
             self.winner = player_id
+
+            if self.event_collector:
+                self.event_collector.push_event.remote(
+                    event_type="game_ended",
+                    actor="GS",
+                    data={
+                        "winner": player_id,
+                        "end_time": self.end_time,
+                        "duration": self.end_time - self.start_time,
+                    },
+                )
+
             return True
 
         return False

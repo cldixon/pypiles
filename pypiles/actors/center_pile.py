@@ -25,10 +25,16 @@ def initialize_activity_metrics() -> ActivityMetrics:
 
 @ray.remote
 class CenterPile:
-    def __init__(self, cards: list[Card], log_file: Path | str | None = None):
+    def __init__(
+        self,
+        cards: list[Card],
+        log_file: Path | str | None = None,
+        event_collector: ray.actor.ActorHandle | None = None,
+    ):
         self.cards = [(card.id, card) for card in cards]
         self.card_id_set = {card.id for card in cards}
         self.metrics = initialize_activity_metrics()
+        self.event_collector = event_collector
 
         self.logger = setup_logger(name="(CP)", log_file=log_file)
 
@@ -64,7 +70,23 @@ class CenterPile:
             f"(CP) accepted {str(replacement_card)} @ Pos[{position}] and returned {str(old_card)} to player (P?)"
         )
         self.metrics["num_swaps"] += 1
+
+        if self.event_collector:
+            self.event_collector.push_event.remote(
+                event_type="center_pile_updated",
+                actor="CP",
+                data={
+                    "position": position,
+                    "accepted_card": replacement_card.id,
+                    "returned_card": old_card.id,
+                    "cards_after": [card.id for _, card in self.cards],
+                },
+            )
+
         return True, old_card
+
+    def get_initial_cards(self) -> list[str]:
+        return [card.id for _, card in self.cards]
 
     def get_center_pile_state(self) -> CenterPileState:
         return CenterPileState(
