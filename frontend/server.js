@@ -7,7 +7,7 @@ import { handler } from './build/handler.js';
 // Node.js defaults to preferring IPv4, which causes connection failures.
 dns.setDefaultResultOrder('verbatim');
 
-const API_INTERNAL_URL = (process.env.API_INTERNAL_URL || 'http://127.0.0.1:8000').trim();
+const API_INTERNAL_URL = (process.env.API_INTERNAL_URL || 'http://127.0.0.1:8000').trim().replace(/\/+$/, '');
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
