@@ -4,7 +4,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
-from pypiles.game import STRATEGY_REGISTRY, GameConfig, GameManager
+from pypiles.characters import CHARACTER_REGISTRY, DEFAULT_CHARACTER_ID
+from pypiles.game import GameConfig, GameManager
 
 # --- Pydantic models for REST API ---
 
@@ -14,7 +15,7 @@ class CreateGameRequest(BaseModel):
     pile_size: int = Field(ge=2, le=10, default=4)
     num_piles_per_player: int = Field(ge=1, le=12, default=6)
     winning_score: int | None = None
-    strategy: str = "GreedySwapper"
+    player_characters: list[str] | None = None
 
 
 class CreateGameResponse(BaseModel):
@@ -46,18 +47,31 @@ async def create_game(req: CreateGameRequest):
             detail=f"num_players * num_piles_per_player must be <= 49, got {req.num_players * req.num_piles_per_player}",
         )
 
-    if req.strategy not in STRATEGY_REGISTRY:
+    # Default all players to default character if not specified
+    player_characters = req.player_characters or [
+        DEFAULT_CHARACTER_ID
+    ] * req.num_players
+
+    if len(player_characters) != req.num_players:
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown strategy '{req.strategy}'. Available: {list(STRATEGY_REGISTRY.keys())}",
+            detail=f"player_characters length ({len(player_characters)}) must match num_players ({req.num_players})",
         )
+
+    available = list(CHARACTER_REGISTRY.keys())
+    for char_id in player_characters:
+        if char_id not in CHARACTER_REGISTRY:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown character '{char_id}'. Available: {available}",
+            )
 
     config = GameConfig(
         num_players=req.num_players,
         pile_size=req.pile_size,
         num_piles_per_player=req.num_piles_per_player,
         winning_score=req.winning_score,
-        strategy=req.strategy,
+        player_characters=player_characters,
     )
     game_id = game_manager.create_game(config)
     return CreateGameResponse(game_id=game_id)
@@ -92,9 +106,14 @@ async def get_game_events(game_id: str):
     return {"events": session.events}
 
 
-@app.get("/api/strategies")
-async def list_strategies():
-    return {"strategies": list(STRATEGY_REGISTRY.keys())}
+@app.get("/api/characters")
+async def list_characters():
+    return {
+        "characters": [
+            {"id": c.id, "name": c.name, "description": c.description}
+            for c in CHARACTER_REGISTRY.values()
+        ]
+    }
 
 
 @app.get("/api/config-constraints")

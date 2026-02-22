@@ -14,8 +14,8 @@ from pypiles.actors import (
     Player,
     PlayerState,
 )
+from pypiles.characters import CHARACTER_REGISTRY, get_character
 from pypiles.deck import prepare_game_cards
-from pypiles.strategies.greedy import GreedySwapper
 
 
 class GameConfig(TypedDict):
@@ -23,15 +23,10 @@ class GameConfig(TypedDict):
     pile_size: int
     num_piles_per_player: int
     winning_score: int | None
-    strategy: str
+    player_characters: list[str]
 
 
 GamePhase = Literal["configuring", "running", "completed", "error"]
-
-
-STRATEGY_REGISTRY: dict[str, type] = {
-    "GreedySwapper": GreedySwapper,
-}
 
 
 class GameSession:
@@ -103,16 +98,16 @@ class GameManager:
             event_collector=session.event_collector,
         )
 
-        strategy_cls = STRATEGY_REGISTRY.get(config["strategy"], GreedySwapper)
-
         session.players = [
             Player.remote(
                 id=f"P{i+1}",
                 cards=player_piles,
-                strategy=strategy_cls(),
+                strategy=get_character(char_id).strategy_cls(),
                 event_collector=session.event_collector,
             )
-            for i, player_piles in enumerate(player_cards)
+            for i, (player_piles, char_id) in enumerate(
+                zip(player_cards, config["player_characters"])
+            )
         ]
 
         # Capture initial state
