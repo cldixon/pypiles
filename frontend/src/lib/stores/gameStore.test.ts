@@ -18,7 +18,7 @@ function mockSetup(): GameSetupPayload {
 			pile_size: 4,
 			num_piles_per_player: 2,
 			winning_score: null,
-			strategy: 'GreedySwapper'
+			player_characters: ['greedy-nathan', 'greedy-nathan']
 		},
 		center_pile: ['red::tophat', 'blue::cardigan', 'green::hoody', 'yellow::mittens'],
 		players: [
