@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
-from pypiles.characters import CHARACTER_REGISTRY, DEFAULT_CHARACTER_ID
+from pypiles.characters import CHARACTER_REGISTRY, assign_default_characters
 from pypiles.game import GameConfig, GameManager
 
 # --- Pydantic models for REST API ---
@@ -47,10 +47,10 @@ async def create_game(req: CreateGameRequest):
             detail=f"num_players * num_piles_per_player must be <= 49, got {req.num_players * req.num_piles_per_player}",
         )
 
-    # Default all players to default character if not specified
-    player_characters = req.player_characters or [
-        DEFAULT_CHARACTER_ID
-    ] * req.num_players
+    # Assign distinct characters by default, cycling through available ones
+    player_characters = req.player_characters or assign_default_characters(
+        req.num_players
+    )
 
     if len(player_characters) != req.num_players:
         raise HTTPException(

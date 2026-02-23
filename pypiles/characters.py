@@ -41,6 +41,13 @@ for _c in _CHARACTERS:
 
 DEFAULT_CHARACTER_ID = "greedy-nathan"
 
+_CHARACTER_IDS = list(CHARACTER_REGISTRY.keys())
+
+
+def assign_default_characters(num_players: int) -> list[str]:
+    """Distribute distinct characters across players, cycling if needed."""
+    return [_CHARACTER_IDS[i % len(_CHARACTER_IDS)] for i in range(num_players)]
+
 
 def get_character(character_id: str) -> Character:
     """Look up a character by ID. Raises KeyError if not found."""
