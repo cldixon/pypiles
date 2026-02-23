@@ -1,4 +1,5 @@
 import asyncio
+import os
 from typing import Literal, TypedDict
 from uuid import uuid4
 
@@ -56,7 +57,9 @@ class GameManager:
     def ensure_ray(self) -> None:
         if not self._ray_initialized:
             if not ray.is_initialized():
+                num_cpus = int(os.environ.get("RAY_NUM_CPUS", 2))
                 ray.init(
+                    num_cpus=num_cpus,
                     ignore_reinit_error=True,
                     _temp_dir="/tmp/ray",
                 )
