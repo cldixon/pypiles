@@ -144,7 +144,8 @@ class GameManager:
                         game_status=session.game_status,
                     )
                     for p in session.players
-                ]
+                ],
+                timeout=60,
             )
 
             # Collect events and final state
@@ -161,6 +162,18 @@ class GameManager:
                 ],
             }
             session.phase = "completed"
+
+        except ray.exceptions.GetTimeoutError:
+            # Game exceeded time limit — force stop and collect what we have
+            ray.get(session.game_status.end_game.remote())
+            session.phase = "error"
+            session.error = "Game timed out (exceeded 60s). This can happen when player strategies deadlock."
+            try:
+                session.events = ray.get(
+                    session.event_collector.get_events.remote()
+                )
+            except Exception:
+                pass
 
         except Exception as e:
             session.phase = "error"
