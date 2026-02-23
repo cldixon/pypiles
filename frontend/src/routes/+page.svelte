@@ -34,11 +34,13 @@
 
 	// Sync playerCharacters array length with numPlayers
 	$effect(() => {
-		const defaultId = characters.length > 0 ? characters[0].id : '';
 		if (playerCharacters.length < numPlayers) {
+			const existing = playerCharacters.length;
 			playerCharacters = [
 				...playerCharacters,
-				...Array(numPlayers - playerCharacters.length).fill(defaultId)
+				...Array.from({ length: numPlayers - existing }, (_, i) =>
+					characters.length > 0 ? characters[(existing + i) % characters.length].id : ''
+				)
 			];
 		} else if (playerCharacters.length > numPlayers) {
 			playerCharacters = playerCharacters.slice(0, numPlayers);
@@ -48,10 +50,10 @@
 	onMount(async () => {
 		try {
 			characters = await getCharacters();
-			playerCharacters = Array(numPlayers).fill(characters[0]?.id ?? '');
+			playerCharacters = Array.from({ length: numPlayers }, (_, i) => characters[i % characters.length]?.id ?? '');
 		} catch {
 			characters = [{ id: 'greedy-nathan', name: 'Greedy Nathan', description: 'Always hunts for the best match' }];
-			playerCharacters = Array(numPlayers).fill('greedy-nathan');
+			playerCharacters = Array.from({ length: numPlayers }, (_, i) => characters[i % characters.length].id);
 		}
 	});
 
