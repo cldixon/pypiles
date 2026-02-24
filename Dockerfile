@@ -12,10 +12,12 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 COPY pyproject.toml uv.lock ./
 
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --no-install-project
 
 COPY pypiles/ ./pypiles/
 COPY server.py ./
+
+RUN uv sync --frozen --no-dev
 
 ENV RAY_NUM_CPUS=4
 ENV RAY_OBJECT_STORE_MEMORY=100000000
