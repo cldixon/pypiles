@@ -10,6 +10,9 @@ import type {
 export class GameWebSocket {
 	private ws: WebSocket | null = null;
 	private gameId: string;
+	private reconnectAttempts = 0;
+	private maxReconnectAttempts = 2;
+	private reconnectDelay = 2000;
 
 	constructor(gameId: string) {
 		this.gameId = gameId;
@@ -25,6 +28,7 @@ export class GameWebSocket {
 
 			switch (msg.type) {
 				case 'game_setup':
+					this.reconnectAttempts = 0;
 					gameStore.setSetup(msg.payload as GameSetupPayload);
 					// Brief pause to show initial state, then start playback
 					setTimeout(() => gameStore.startPlaying(), 1200);
@@ -51,15 +55,27 @@ export class GameWebSocket {
 		this.ws.onerror = () => {
 			// Only set error if the game hasn't already completed
 			if (get(gameStore).phase !== 'complete') {
-				gameStore.setError('WebSocket connection error');
+				if (this.reconnectAttempts < this.maxReconnectAttempts) {
+					// Will attempt reconnect in onclose handler
+				} else {
+					gameStore.setError('Connection to the game server failed.');
+				}
 			}
 		};
 
 		this.ws.onclose = (event) => {
-			// Normal closure (1000) or game already complete — no action needed
-			// Unexpected closure during play is an error
-			if (event.code !== 1000 && get(gameStore).phase !== 'complete') {
-				gameStore.setError('WebSocket connection closed unexpectedly');
+			// Normal closure (1000) or game already complete -- no action needed
+			if (event.code === 1000 || get(gameStore).phase === 'complete') {
+				return;
+			}
+			// Unexpected closure during play -- attempt reconnect
+			if (this.reconnectAttempts < this.maxReconnectAttempts) {
+				this.reconnectAttempts++;
+				setTimeout(() => this.connect(), this.reconnectDelay);
+			} else {
+				gameStore.setError(
+					'Connection to the game server was lost. The server may be restarting.'
+				);
 			}
 		};
 	}
@@ -71,6 +87,7 @@ export class GameWebSocket {
 	}
 
 	disconnect() {
+		this.reconnectAttempts = this.maxReconnectAttempts; // prevent reconnect on intentional close
 		this.ws?.close();
 		this.ws = null;
 	}
