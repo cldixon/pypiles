@@ -29,4 +29,4 @@ ENV RAY_DEDUP_LOGS=0
 ENV PORT=8000
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn server:app --host 0.0.0.0 --port $PORT"]
+CMD ["sh", "-c", "uvicorn server:app --host :: --port $PORT"]
