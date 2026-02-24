@@ -76,9 +76,21 @@
 	</div>
 {:else if gameState.phase === 'error'}
 	<div class="status-page">
-		<h2>Error</h2>
+		<h2>Something Went Wrong</h2>
 		<p class="error">{gameState.error}</p>
-		<a href="/">Back to config</a>
+		<p class="error-hint">
+			{#if gameState.error?.includes('timed out')}
+				The game took too long to complete. Try fewer players or smaller piles.
+			{:else if gameState.error?.includes('Connection') || gameState.error?.includes('WebSocket')}
+				The connection to the server was lost. The server may be restarting.
+			{:else}
+				An unexpected error occurred during the game.
+			{/if}
+		</p>
+		<div class="error-actions">
+			<a href="/" class="btn-primary">New Game</a>
+			<button class="btn-secondary" onclick={() => window.location.reload()}>Retry</button>
+		</div>
 	</div>
 {:else if gameState.phase === 'setup'}
 	<div class="status-page">
@@ -153,6 +165,51 @@
 
 	.error {
 		color: var(--danger) !important;
+	}
+
+	.error-hint {
+		color: var(--text-muted) !important;
+		font-size: 0.85rem;
+		max-width: 400px;
+		text-align: center;
+	}
+
+	.error-actions {
+		display: flex;
+		gap: 0.75rem;
+		margin-top: 0.5rem;
+	}
+
+	.btn-primary {
+		background: var(--accent);
+		color: white;
+		border: none;
+		padding: 0.5rem 1.25rem;
+		border-radius: var(--radius);
+		font-size: 0.85rem;
+		font-weight: 600;
+		text-decoration: none;
+		cursor: pointer;
+	}
+
+	.btn-primary:hover {
+		background: var(--accent-light);
+	}
+
+	.btn-secondary {
+		background: transparent;
+		color: var(--text-secondary);
+		border: 1px solid var(--border);
+		padding: 0.5rem 1.25rem;
+		border-radius: var(--radius);
+		font-size: 0.85rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.btn-secondary:hover {
+		border-color: var(--text-secondary);
+		color: var(--text-primary);
 	}
 
 	.spinner {

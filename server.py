@@ -144,14 +144,21 @@ async def game_websocket(websocket: WebSocket, game_id: str):
         return
 
     if session.phase == "configuring":
-        await game_manager.run_game(game_id)
+        try:
+            await asyncio.wait_for(game_manager.run_game(game_id), timeout=90)
+        except asyncio.TimeoutError:
+            session.phase = "error"
+            session.error = "Game timed out waiting to start. The server may be busy."
+        except Exception as e:
+            session.phase = "error"
+            session.error = f"Game execution failed: {e}"
     elif session.phase == "running":
         await websocket.send_json(
             {"type": "error", "game_id": game_id, "payload": {"message": "Game is already running"}}
         )
         await websocket.close()
         return
-    # "completed" is fine — we replay from stored events
+    # "completed" is fine -- we replay from stored events
 
     if session.phase == "error":
         await websocket.send_json(

@@ -70,6 +70,9 @@ class Player:
             if add_time_delay:
                 time.sleep(random.uniform(0.5, 0.99))
 
+            # Small backoff every iteration to reduce contention on shared actors
+            time.sleep(random.uniform(0.01, 0.03))
+
             center_pile_cards = ray.get(center_pile.view_cards.remote())
 
             swap_request = self.strategy.find_swap(
