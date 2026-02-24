@@ -3,7 +3,13 @@ export interface GameConfig {
 	pile_size: number;
 	num_piles_per_player: number;
 	winning_score: number | null;
-	strategy: string;
+	player_characters: string[];
+}
+
+export interface Character {
+	id: string;
+	name: string;
+	description: string;
 }
 
 export interface CardInfo {

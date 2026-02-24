@@ -172,6 +172,8 @@ class Player:
                         actor=self.id,
                         data={"player_id": self.id},
                     )
+                # Back off to avoid tight spin when strategy finds no swap
+                time.sleep(random.uniform(0.05, 0.15))
 
             if len(self.completed) >= 1:
                 victory = ray.get(

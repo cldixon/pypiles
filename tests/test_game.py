@@ -14,7 +14,7 @@ def test_create_game(game_manager):
         pile_size=4,
         num_piles_per_player=6,
         winning_score=None,
-        strategy="GreedySwapper",
+        player_characters=["greedy-nathan", "greedy-nathan"],
     )
     game_id = game_manager.create_game(config)
     assert game_id is not None
@@ -31,7 +31,7 @@ def test_run_game(game_manager):
         pile_size=4,
         num_piles_per_player=6,
         winning_score=None,
-        strategy="GreedySwapper",
+        player_characters=["greedy-nathan", "greedy-nathan"],
     )
     game_id = game_manager.create_game(config)
 
@@ -66,7 +66,7 @@ def test_list_games(game_manager):
         pile_size=4,
         num_piles_per_player=6,
         winning_score=None,
-        strategy="GreedySwapper",
+        player_characters=["greedy-nathan", "greedy-nathan", "greedy-nathan"],
     )
     game_manager.create_game(config)
 
@@ -82,7 +82,7 @@ def test_run_game_custom_winning_score(game_manager):
         pile_size=4,
         num_piles_per_player=6,
         winning_score=1,
-        strategy="GreedySwapper",
+        player_characters=["greedy-nathan", "greedy-nathan"],
     )
     game_id = game_manager.create_game(config)
 

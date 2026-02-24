@@ -1,15 +1,19 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { createGame, getStrategies } from '$lib/api/client';
+	import { createGame, getCharacters } from '$lib/api/client';
+	import type { Character } from '$lib/api/types';
 	import ConfigSummary from '$lib/components/config/ConfigSummary.svelte';
+	import PlayerConfig from '$lib/components/config/PlayerConfig.svelte';
+	import LandingModal from '$lib/components/landing/LandingModal.svelte';
 
+	let showLanding = $state(true);
 	let numPlayers = $state(2);
 	let pileSize = $state(4);
 	let numPilesPerPlayer = $state(6);
 	let winningScore = $state<number | null>(null);
-	let strategy = $state('GreedySwapper');
-	let strategies = $state<string[]>([]);
+	let characters = $state<Character[]>([]);
+	let playerCharacters = $state<string[]>([]);
 	let error = $state('');
 	let loading = $state(false);
 
@@ -28,11 +32,28 @@
 		}
 	});
 
+	// Sync playerCharacters array length with numPlayers
+	$effect(() => {
+		if (playerCharacters.length < numPlayers) {
+			const existing = playerCharacters.length;
+			playerCharacters = [
+				...playerCharacters,
+				...Array.from({ length: numPlayers - existing }, (_, i) =>
+					characters.length > 0 ? characters[(existing + i) % characters.length].id : ''
+				)
+			];
+		} else if (playerCharacters.length > numPlayers) {
+			playerCharacters = playerCharacters.slice(0, numPlayers);
+		}
+	});
+
 	onMount(async () => {
 		try {
-			strategies = await getStrategies();
+			characters = await getCharacters();
+			playerCharacters = Array.from({ length: numPlayers }, (_, i) => characters[i % characters.length]?.id ?? '');
 		} catch {
-			strategies = ['GreedySwapper'];
+			characters = [{ id: 'greedy-nathan', name: 'Greedy Nathan', description: 'Always hunts for the best match' }];
+			playerCharacters = Array.from({ length: numPlayers }, (_, i) => characters[i % characters.length].id);
 		}
 	});
 
@@ -46,7 +67,7 @@
 				pile_size: pileSize,
 				num_piles_per_player: numPilesPerPlayer,
 				winning_score: winningScore,
-				strategy
+				player_characters: playerCharacters
 			});
 			goto(`/game/${gameId}`);
 		} catch (e) {
@@ -59,6 +80,10 @@
 <svelte:head>
 	<title>PyPiles - Configure Game</title>
 </svelte:head>
+
+{#if showLanding}
+	<LandingModal onplay={() => (showLanding = false)} />
+{/if}
 
 <div class="config-page">
 	<div class="hero">
@@ -144,14 +169,20 @@
 				</div>
 			</div>
 
-			<div class="form-group">
-				<label for="strategy">Strategy</label>
-				<select id="strategy" bind:value={strategy}>
-					{#each strategies as s}
-						<option value={s}>{s}</option>
-					{/each}
-				</select>
-			</div>
+			{#if characters.length > 0}
+				<div class="player-configs">
+					<label>Player Characters</label>
+					<div class="player-grid">
+						{#each playerCharacters as _, i}
+							<PlayerConfig
+								playerIndex={i}
+								{characters}
+								bind:selectedCharacterId={playerCharacters[i]}
+							/>
+						{/each}
+					</div>
+				</div>
+			{/if}
 
 			{#if error}
 				<div class="error">{error}</div>
@@ -267,13 +298,22 @@
 		color: var(--text-muted);
 	}
 
-	select {
-		background: var(--bg-card);
-		color: var(--text-primary);
-		border: 1px solid var(--border);
-		padding: 0.5rem 0.75rem;
-		border-radius: var(--radius);
-		font-size: 0.9rem;
+	.player-configs {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.player-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.5rem;
+	}
+
+	@media (max-width: 500px) {
+		.player-grid {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	.error {

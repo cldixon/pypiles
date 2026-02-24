@@ -22,7 +22,7 @@ def mock_session():
             pile_size=4,
             num_piles_per_player=6,
             winning_score=None,
-            strategy="GreedySwapper",
+            player_characters=["greedy-nathan", "greedy-nathan"],
         ),
     )
     session.phase = "completed"
@@ -46,13 +46,16 @@ def mock_session():
     game_manager.sessions.pop(session.game_id, None)
 
 
-class TestListStrategies:
-    async def test_returns_strategies(self, client):
-        resp = await client.get("/api/strategies")
+class TestListCharacters:
+    async def test_returns_characters(self, client):
+        resp = await client.get("/api/characters")
         assert resp.status_code == 200
         data = resp.json()
-        assert "strategies" in data
-        assert "GreedySwapper" in data["strategies"]
+        assert "characters" in data
+        ids = [c["id"] for c in data["characters"]]
+        assert "greedy-nathan" in ids
+        assert "random-rana" in ids
+        assert "cautious-carlo" in ids
 
 
 class TestConfigConstraints:
@@ -75,7 +78,19 @@ class TestCreateGame:
                 "num_players": 2,
                 "pile_size": 4,
                 "num_piles_per_player": 6,
-                "strategy": "GreedySwapper",
+                "player_characters": ["greedy-nathan", "greedy-nathan"],
+            },
+        )
+        assert resp.status_code == 200
+        assert "game_id" in resp.json()
+
+    async def test_create_game_defaults_characters(self, client):
+        resp = await client.post(
+            "/api/games",
+            json={
+                "num_players": 2,
+                "pile_size": 4,
+                "num_piles_per_player": 6,
             },
         )
         assert resp.status_code == 200
@@ -88,19 +103,30 @@ class TestCreateGame:
                 "num_players": 8,
                 "pile_size": 4,
                 "num_piles_per_player": 12,
-                "strategy": "GreedySwapper",
             },
         )
         assert resp.status_code == 400
 
-    async def test_invalid_strategy(self, client):
+    async def test_invalid_character(self, client):
         resp = await client.post(
             "/api/games",
             json={
                 "num_players": 2,
                 "pile_size": 4,
                 "num_piles_per_player": 6,
-                "strategy": "NonExistent",
+                "player_characters": ["greedy-nathan", "nonexistent"],
+            },
+        )
+        assert resp.status_code == 400
+
+    async def test_character_count_mismatch(self, client):
+        resp = await client.post(
+            "/api/games",
+            json={
+                "num_players": 2,
+                "pile_size": 4,
+                "num_piles_per_player": 6,
+                "player_characters": ["greedy-nathan"],
             },
         )
         assert resp.status_code == 400
@@ -112,7 +138,6 @@ class TestCreateGame:
                 "num_players": 1,
                 "pile_size": 4,
                 "num_piles_per_player": 6,
-                "strategy": "GreedySwapper",
             },
         )
         assert resp.status_code == 422

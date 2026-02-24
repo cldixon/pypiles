@@ -1,4 +1,4 @@
-import type { ConfigConstraints, GameConfig } from './types';
+import type { Character, ConfigConstraints, GameConfig } from './types';
 
 export async function createGame(config: Partial<GameConfig>): Promise<string> {
 	const res = await fetch('/api/games', {
@@ -14,10 +14,10 @@ export async function createGame(config: Partial<GameConfig>): Promise<string> {
 	return data.game_id;
 }
 
-export async function getStrategies(): Promise<string[]> {
-	const res = await fetch('/api/strategies');
+export async function getCharacters(): Promise<Character[]> {
+	const res = await fetch('/api/characters');
 	const data = await res.json();
-	return data.strategies;
+	return data.characters;
 }
 
 export async function getConfigConstraints(): Promise<ConfigConstraints> {

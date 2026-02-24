@@ -1,4 +1,5 @@
 import asyncio
+import os
 from typing import Literal, TypedDict
 from uuid import uuid4
 
@@ -14,8 +15,8 @@ from pypiles.actors import (
     Player,
     PlayerState,
 )
+from pypiles.characters import CHARACTER_REGISTRY, get_character
 from pypiles.deck import prepare_game_cards
-from pypiles.strategies.greedy import GreedySwapper
 
 
 class GameConfig(TypedDict):
@@ -23,15 +24,10 @@ class GameConfig(TypedDict):
     pile_size: int
     num_piles_per_player: int
     winning_score: int | None
-    strategy: str
+    player_characters: list[str]
 
 
 GamePhase = Literal["configuring", "running", "completed", "error"]
-
-
-STRATEGY_REGISTRY: dict[str, type] = {
-    "GreedySwapper": GreedySwapper,
-}
 
 
 class GameSession:
@@ -61,7 +57,9 @@ class GameManager:
     def ensure_ray(self) -> None:
         if not self._ray_initialized:
             if not ray.is_initialized():
+                num_cpus = int(os.environ.get("RAY_NUM_CPUS", 2))
                 ray.init(
+                    num_cpus=num_cpus,
                     ignore_reinit_error=True,
                     _temp_dir="/tmp/ray",
                 )
@@ -103,16 +101,16 @@ class GameManager:
             event_collector=session.event_collector,
         )
 
-        strategy_cls = STRATEGY_REGISTRY.get(config["strategy"], GreedySwapper)
-
         session.players = [
             Player.remote(
                 id=f"P{i+1}",
                 cards=player_piles,
-                strategy=strategy_cls(),
+                strategy=get_character(char_id).strategy_cls(),
                 event_collector=session.event_collector,
             )
-            for i, player_piles in enumerate(player_cards)
+            for i, (player_piles, char_id) in enumerate(
+                zip(player_cards, config["player_characters"])
+            )
         ]
 
         # Capture initial state
@@ -146,7 +144,8 @@ class GameManager:
                         game_status=session.game_status,
                     )
                     for p in session.players
-                ]
+                ],
+                timeout=60,
             )
 
             # Collect events and final state
@@ -163,6 +162,18 @@ class GameManager:
                 ],
             }
             session.phase = "completed"
+
+        except ray.exceptions.GetTimeoutError:
+            # Game exceeded time limit — force stop and collect what we have
+            ray.get(session.game_status.end_game.remote())
+            session.phase = "error"
+            session.error = "Game timed out (exceeded 60s). This can happen when player strategies deadlock."
+            try:
+                session.events = ray.get(
+                    session.event_collector.get_events.remote()
+                )
+            except Exception:
+                pass
 
         except Exception as e:
             session.phase = "error"

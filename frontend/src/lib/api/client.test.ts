@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createGame, getStrategies, getConfigConstraints, getGame, getGameEvents } from './client';
+import { createGame, getCharacters, getConfigConstraints, getGame, getGameEvents } from './client';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -42,14 +42,20 @@ describe('createGame', () => {
 	});
 });
 
-describe('getStrategies', () => {
-	it('returns strategies array', async () => {
+describe('getCharacters', () => {
+	it('returns characters array', async () => {
 		mockFetch.mockResolvedValue({
 			ok: true,
-			json: async () => ({ strategies: ['GreedySwapper'] })
+			json: async () => ({
+				characters: [
+					{ id: 'greedy-nathan', name: 'Greedy Nathan', description: 'Always hunts for the best match' }
+				]
+			})
 		});
-		const result = await getStrategies();
-		expect(result).toEqual(['GreedySwapper']);
+		const result = await getCharacters();
+		expect(result).toEqual([
+			{ id: 'greedy-nathan', name: 'Greedy Nathan', description: 'Always hunts for the best match' }
+		]);
 	});
 });
 

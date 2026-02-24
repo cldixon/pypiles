@@ -36,8 +36,8 @@
 			<span class="value">{totalEvents}</span>
 		</div>
 		<div class="stat">
-			<span class="label">Strategy</span>
-			<span class="value">{config.strategy}</span>
+			<span class="label">Characters</span>
+			<span class="value">{config.player_characters.join(', ')}</span>
 		</div>
 		<div class="stat">
 			<span class="label">Center Pile Views</span>
