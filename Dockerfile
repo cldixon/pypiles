@@ -19,6 +19,8 @@ COPY server.py ./
 
 RUN uv sync --frozen --no-dev
 
+ENV PATH="/app/.venv/bin:$PATH"
+
 ENV RAY_NUM_CPUS=4
 ENV RAY_OBJECT_STORE_MEMORY=100000000
 ENV RAY_DISABLE_DOCKER_CPU_WARNING=1
@@ -27,4 +29,4 @@ ENV RAY_DEDUP_LOGS=0
 ENV PORT=8000
 EXPOSE 8000
 
-CMD ["sh", "-c", "uv run uvicorn server:app --host 0.0.0.0 --port $PORT"]
+CMD ["sh", "-c", "uvicorn server:app --host 0.0.0.0 --port $PORT"]
