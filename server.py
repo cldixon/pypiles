@@ -1,10 +1,12 @@
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+import ray
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from pypiles.characters import CHARACTER_REGISTRY, assign_default_characters
+from pypiles.db import close_db, init_db, log_game_created, log_game_completed
 from pypiles.game import GameConfig, GameManager
 
 # --- Pydantic models for REST API ---
@@ -30,7 +32,9 @@ game_manager = GameManager()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     game_manager.ensure_ray()
+    await init_db()
     yield
+    await close_db()
 
 
 app = FastAPI(title="PyPiles", lifespan=lifespan)
@@ -40,7 +44,7 @@ app = FastAPI(title="PyPiles", lifespan=lifespan)
 
 
 @app.post("/api/games", response_model=CreateGameResponse)
-async def create_game(req: CreateGameRequest):
+async def create_game(req: CreateGameRequest, request: Request):
     if req.num_players * req.num_piles_per_player > 49:
         raise HTTPException(
             status_code=400,
@@ -74,6 +78,12 @@ async def create_game(req: CreateGameRequest):
         player_characters=player_characters,
     )
     game_id = game_manager.create_game(config)
+    await log_game_created(
+        game_id=game_id,
+        config=config,
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None,
+    )
     return CreateGameResponse(game_id=game_id)
 
 
@@ -131,6 +141,128 @@ async def get_config_constraints():
 # --- WebSocket endpoint ---
 
 
+async def _poll_events(session, cursor: int) -> list:
+    """Poll EventCollector for new events (runs ray.get in executor)."""
+    loop = asyncio.get_running_loop()
+    try:
+        return await loop.run_in_executor(
+            None,
+            ray.get,
+            session.event_collector.get_events_since.remote(cursor),
+        )
+    except Exception:
+        return []
+
+
+async def _recv_control(websocket: WebSocket) -> dict | None:
+    """Non-blocking read of a client control message."""
+    try:
+        msg = await asyncio.wait_for(websocket.receive_json(), timeout=0.01)
+        if msg.get("type") == "playback_control":
+            return msg
+    except asyncio.TimeoutError:
+        pass
+    return None
+
+
+async def _stream_live(websocket: WebSocket, game_id: str, session) -> None:
+    """Stream events in real time as the game plays."""
+    cursor = 0
+    paused = False
+    skip_requested = False
+
+    while True:
+        msg = await _recv_control(websocket)
+        if msg:
+            action = msg.get("action")
+            if action == "pause":
+                paused = True
+            elif action == "resume":
+                paused = False
+            elif action == "skip_to_end":
+                skip_requested = True
+
+        if paused and not skip_requested:
+            await asyncio.sleep(0.1)
+            continue
+
+        # Check if game finished (phase set by background thread)
+        game_done = session.phase in ("completed", "error")
+
+        if game_done:
+            # Game thread already collected all events into session.events.
+            # Send any remaining events from the finalized list.
+            remaining = session.events[cursor:]
+            if remaining:
+                await websocket.send_json(
+                    {
+                        "type": "event_batch",
+                        "game_id": game_id,
+                        "payload": {"events": remaining, "progress": 1.0},
+                    }
+                )
+            break
+
+        # Game still running -- poll the EventCollector actor
+        new_events = await _poll_events(session, cursor)
+        if new_events:
+            await websocket.send_json(
+                {
+                    "type": "event_batch",
+                    "game_id": game_id,
+                    "payload": {"events": new_events, "progress": None},
+                }
+            )
+            cursor += len(new_events)
+
+        await asyncio.sleep(0.05)  # 50ms polling interval
+
+
+async def _stream_replay(websocket: WebSocket, game_id: str, session) -> None:
+    """Replay stored events with pacing (for completed games)."""
+    playback_speed = 1.0
+    paused = False
+    batch_size = 5
+    base_delay = 0.1  # 100ms between batches at 1x
+
+    events = session.events
+    idx = 0
+
+    while idx < len(events):
+        msg = await _recv_control(websocket)
+        if msg:
+            action = msg.get("action")
+            if action == "pause":
+                paused = True
+            elif action == "resume":
+                paused = False
+            elif action == "set_speed":
+                playback_speed = max(
+                    0.1, min(20.0, float(msg.get("value", 1.0)))
+                )
+            elif action == "skip_to_end":
+                idx = len(events)
+                continue
+
+        if paused:
+            await asyncio.sleep(0.1)
+            continue
+
+        batch = events[idx : idx + batch_size]
+        progress = min(1.0, (idx + len(batch)) / len(events))
+
+        await websocket.send_json(
+            {
+                "type": "event_batch",
+                "game_id": game_id,
+                "payload": {"events": batch, "progress": progress},
+            }
+        )
+
+        idx += len(batch)
+        await asyncio.sleep(base_delay / playback_speed)
+
+
 @app.websocket("/ws/games/{game_id}")
 async def game_websocket(websocket: WebSocket, game_id: str):
     await websocket.accept()
@@ -143,22 +275,24 @@ async def game_websocket(websocket: WebSocket, game_id: str):
         await websocket.close()
         return
 
+    # Determine mode: live streaming vs replay
+    live_mode = False
+
     if session.phase == "configuring":
+        # Setup actors and initial state, then stream live
         try:
-            await asyncio.wait_for(game_manager.run_game(game_id), timeout=90)
+            await asyncio.wait_for(game_manager.setup_game(game_id), timeout=30)
+            live_mode = True
         except asyncio.TimeoutError:
             session.phase = "error"
-            session.error = "Game timed out waiting to start. The server may be busy."
+            session.error = "Game setup timed out. The server may be busy."
         except Exception as e:
             session.phase = "error"
-            session.error = f"Game execution failed: {e}"
+            session.error = f"Game setup failed: {e}"
     elif session.phase == "running":
-        await websocket.send_json(
-            {"type": "error", "game_id": game_id, "payload": {"message": "Game is already running"}}
-        )
-        await websocket.close()
-        return
-    # "completed" is fine -- we replay from stored events
+        # Join an already-running game -- stream live from where we are
+        live_mode = True
+    # "completed" -> replay mode (live_mode stays False)
 
     if session.phase == "error":
         await websocket.send_json(
@@ -167,7 +301,7 @@ async def game_websocket(websocket: WebSocket, game_id: str):
         await websocket.close()
         return
 
-    # Send setup
+    # Send setup message
     await websocket.send_json(
         {
             "type": "game_setup",
@@ -175,87 +309,50 @@ async def game_websocket(websocket: WebSocket, game_id: str):
             "payload": {
                 **(session.initial_state or {}),
                 "total_events": len(session.events),
+                "mode": "live" if live_mode else "replay",
             },
         }
     )
 
-    # Stream events in batches with pacing
-    playback_speed = 1.0
-    paused = False
-    batch_size = 5
-    base_delay = 0.1  # 100ms between batches at 1x
-
-    events = session.events
-    idx = 0
-
+    game_task = None
     try:
-        while idx < len(events):
-            # Check for control messages (non-blocking)
-            try:
-                msg = await asyncio.wait_for(
-                    websocket.receive_json(), timeout=0.01
-                )
-                if msg.get("type") == "playback_control":
-                    action = msg.get("action")
-                    if action == "pause":
-                        paused = True
-                    elif action == "resume":
-                        paused = False
-                    elif action == "set_speed":
-                        playback_speed = max(
-                            0.1, min(20.0, float(msg.get("value", 1.0)))
-                        )
-                    elif action == "skip_to_end":
-                        idx = len(events)
-                        continue
-            except asyncio.TimeoutError:
-                pass
+        if live_mode:
+            # Start gameplay in background, stream events as they happen
+            game_task = asyncio.create_task(game_manager.run_players(game_id))
+            await _stream_live(websocket, game_id, session)
+        else:
+            # Replay stored events with pacing
+            await _stream_replay(websocket, game_id, session)
 
-            if paused:
-                await asyncio.sleep(0.1)
-                continue
-
-            # Send batch
-            batch = events[idx : idx + batch_size]
-            progress = min(1.0, (idx + len(batch)) / len(events))
-
-            await websocket.send_json(
-                {
-                    "type": "event_batch",
-                    "game_id": game_id,
-                    "payload": {
-                        "events": batch,
-                        "progress": progress,
-                    },
-                }
+        # Log completion to database
+        if session.final_state:
+            await log_game_completed(
+                game_id=game_id,
+                phase=session.phase,
+                duration_ms=session.final_state.get("duration_ms", 0),
+                total_events=session.final_state.get("total_events", 0),
+                winner=session.final_state.get("game_status", {}).get("winner"),
+                error=session.error,
+                players=session.final_state.get("players", []),
             )
-
-            idx += len(batch)
-            await asyncio.sleep(base_delay / playback_speed)
 
         # Send completion
         await websocket.send_json(
             {
                 "type": "game_complete",
                 "game_id": game_id,
-                "payload": {
-                    **(session.final_state or {}),
-                    "duration_ms": _calc_duration(session),
-                    "total_events": len(session.events),
-                },
+                "payload": session.final_state or {},
             }
         )
 
-        # Gracefully close the WebSocket with normal closure code
         await websocket.close(code=1000)
 
     except WebSocketDisconnect:
         pass
-
-
-def _calc_duration(session) -> float:
-    if session.events and len(session.events) >= 2:
-        return (
-            session.events[-1]["timestamp"] - session.events[0]["timestamp"]
-        ) * 1000
-    return 0.0
+    finally:
+        # Ensure the background game task completes even if the client disconnects
+        if game_task and not game_task.done():
+            try:
+                await game_task
+            except Exception:
+                pass

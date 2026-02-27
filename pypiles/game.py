@@ -123,8 +123,8 @@ class GameManager:
         session.center_pile = None
         session.players = []
 
-    def _setup_and_run_game(self, game_id: str) -> None:
-        """Synchronous game execution. Sets up actors, runs game, collects results."""
+    def _setup_game(self, game_id: str) -> None:
+        """Create actors and capture initial state. Sets phase to 'running'."""
         session = self.sessions[game_id]
 
         with self._game_lock:
@@ -190,74 +190,105 @@ class GameManager:
                 )
             )
 
-            # Run game
             session.phase = "running"
+
+    def _run_players(self, game_id: str) -> None:
+        """Start player gameplay, wait for completion, collect results.
+
+        Must be called after _setup_game. Sets phase to 'completed' or 'error'.
+        """
+        session = self.sessions[game_id]
+        config = session.config
+
+        try:
+            # Scale timeout with player count: 60s base + 15s per player beyond 2
+            num_players = config["num_players"]
+            game_timeout = 60 + max(0, num_players - 2) * 15
+
+            ray.get(
+                [
+                    p.play.remote(
+                        center_pile=session.center_pile,
+                        game_status=session.game_status,
+                    )
+                    for p in session.players
+                ],
+                timeout=game_timeout,
+            )
+
+            # Collect events and final state
+            session.events = ray.get(
+                session.event_collector.get_events.remote()
+            )
+            duration_ms = 0.0
+            if len(session.events) >= 2:
+                duration_ms = (
+                    session.events[-1]["timestamp"]
+                    - session.events[0]["timestamp"]
+                ) * 1000
+            session.final_state = {
+                "game_status": ray.get(
+                    session.game_status.get_game_state.remote()
+                ),
+                "center_pile": ray.get(
+                    session.center_pile.get_center_pile_state.remote()
+                ),
+                "players": [
+                    ray.get(p.get_player_state.remote())
+                    for p in session.players
+                ],
+                "duration_ms": duration_ms,
+                "total_events": len(session.events),
+            }
+            session.phase = "completed"
+
+        except ray.exceptions.GetTimeoutError:
+            # Game exceeded time limit -- force stop and collect what we have
             try:
-                # Scale timeout with player count: 60s base + 15s per player beyond 2
-                num_players = config["num_players"]
-                game_timeout = 60 + max(0, num_players - 2) * 15
-
-                ray.get(
-                    [
-                        p.play.remote(
-                            center_pile=session.center_pile,
-                            game_status=session.game_status,
-                        )
-                        for p in session.players
-                    ],
-                    timeout=game_timeout,
-                )
-
-                # Collect events and final state
+                ray.get(session.game_status.end_game.remote())
+            except Exception:
+                pass
+            session.phase = "error"
+            session.error = f"Game timed out (exceeded {game_timeout}s). This can happen when player strategies deadlock."
+            try:
                 session.events = ray.get(
                     session.event_collector.get_events.remote()
                 )
-                session.final_state = {
-                    "game_status": ray.get(
-                        session.game_status.get_game_state.remote()
-                    ),
-                    "center_pile": ray.get(
-                        session.center_pile.get_center_pile_state.remote()
-                    ),
-                    "players": [
-                        ray.get(p.get_player_state.remote())
-                        for p in session.players
-                    ],
-                }
-                session.phase = "completed"
+            except Exception:
+                pass
 
-            except ray.exceptions.GetTimeoutError:
-                # Game exceeded time limit -- force stop and collect what we have
-                try:
-                    ray.get(session.game_status.end_game.remote())
-                except Exception:
-                    pass
-                session.phase = "error"
-                session.error = f"Game timed out (exceeded {game_timeout}s). This can happen when player strategies deadlock."
-                try:
-                    session.events = ray.get(
-                        session.event_collector.get_events.remote()
-                    )
-                except Exception:
-                    pass
+        except Exception as e:
+            session.phase = "error"
+            session.error = str(e)
+            if not ray.is_initialized():
+                self._ray_initialized = False
+            try:
+                session.events = ray.get(
+                    session.event_collector.get_events.remote()
+                )
+            except Exception:
+                pass
 
-            except Exception as e:
-                session.phase = "error"
-                session.error = str(e)
-                if not ray.is_initialized():
-                    self._ray_initialized = False
-                try:
-                    session.events = ray.get(
-                        session.event_collector.get_events.remote()
-                    )
-                except Exception:
-                    pass
+        finally:
+            self._cleanup_actors(session)
 
-            finally:
-                self._cleanup_actors(session)
+    def _setup_and_run_game(self, game_id: str) -> None:
+        """Synchronous game execution. Sets up actors, runs game, collects results."""
+        self._setup_game(game_id)
+        self._run_players(game_id)
+
+    async def setup_game(self, game_id: str) -> None:
+        """Async: create actors and initial state (runs in executor)."""
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._setup_game, game_id)
+
+    async def run_players(self, game_id: str) -> None:
+        """Async: start gameplay and wait for completion (runs in executor)."""
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._run_players, game_id)
 
     async def run_game(self, game_id: str) -> None:
-        """Async wrapper that runs the game in an executor to avoid blocking."""
+        """Async wrapper that runs setup + gameplay in an executor."""
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, self._setup_and_run_game, game_id)
 

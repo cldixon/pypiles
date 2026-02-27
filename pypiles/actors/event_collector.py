@@ -46,5 +46,9 @@ class EventCollector:
     def get_events(self) -> list[GameEvent]:
         return self.events
 
+    def get_events_since(self, cursor: int) -> list[GameEvent]:
+        """Return events from cursor position onward (for live streaming)."""
+        return self.events[cursor:]
+
     def get_event_count(self) -> int:
         return len(self.events)

@@ -15,6 +15,7 @@
 	let speed = $state(1.0);
 	let gameState: GameState = $state({
 		phase: 'connecting',
+		mode: 'replay',
 		setup: null,
 		events: [],
 		completion: null,
@@ -95,8 +96,13 @@
 {:else if gameState.phase === 'setup'}
 	<div class="status-page">
 		<h2>Game Ready</h2>
-		<p>{gameState.setup?.config.num_players} players, {gameState.setup?.total_events} events to replay</p>
-		<p class="subtext">Starting playback...</p>
+		{#if gameState.mode === 'live'}
+			<p>{gameState.setup?.config.num_players} players</p>
+			<p class="subtext">Starting game...</p>
+		{:else}
+			<p>{gameState.setup?.config.num_players} players, {gameState.setup?.total_events} events to replay</p>
+			<p class="subtext">Starting playback...</p>
+		{/if}
 	</div>
 {:else}
 	<!-- Playing or Complete -->
@@ -121,6 +127,7 @@
 			progress={gameState.progress}
 			{paused}
 			{speed}
+			mode={gameState.mode}
 			totalEvents={gameState.setup?.total_events || 0}
 			currentEvents={gameState.events.length}
 			onPause={handlePause}

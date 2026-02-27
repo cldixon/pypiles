@@ -10,6 +10,7 @@ export type GamePhase = 'connecting' | 'setup' | 'playing' | 'complete' | 'error
 
 export interface GameState {
 	phase: GamePhase;
+	mode: 'live' | 'replay';
 	setup: GameSetupPayload | null;
 	events: GameEvent[];
 	completion: GameCompletePayload | null;
@@ -35,6 +36,7 @@ export interface SwapHighlight {
 function createInitialState(): GameState {
 	return {
 		phase: 'connecting',
+		mode: 'replay',
 		setup: null,
 		events: [],
 		completion: null,
@@ -72,6 +74,7 @@ function createGameStore() {
 				return {
 					...s,
 					phase: 'setup',
+					mode: setup.mode || 'replay',
 					setup,
 					centerPile: [...setup.center_pile],
 					playerPiles,
@@ -83,7 +86,7 @@ function createGameStore() {
 		startPlaying() {
 			update((s) => ({ ...s, phase: 'playing' }));
 		},
-		addEvents(events: GameEvent[], progress: number) {
+		addEvents(events: GameEvent[], progress: number | null) {
 			update((s) => {
 				const newRecentSwaps = [...s.recentSwaps];
 				let centerPile = [...s.centerPile];
@@ -150,7 +153,7 @@ function createGameStore() {
 				return {
 					...s,
 					events: [...s.events, ...events],
-					progress,
+					progress: progress ?? s.progress,
 					centerPile,
 					playerPiles,
 					playerCompleted,

@@ -29,6 +29,7 @@ export interface GameSetupPayload {
 	center_pile: string[];
 	players: PlayerSetup[];
 	total_events: number;
+	mode: 'live' | 'replay';
 }
 
 export interface GameEvent {
@@ -41,7 +42,7 @@ export interface GameEvent {
 
 export interface EventBatchPayload {
 	events: GameEvent[];
-	progress: number;
+	progress: number | null;
 }
 
 export interface PlayerMetrics {

@@ -3,6 +3,7 @@
 		progress,
 		paused,
 		speed,
+		mode = 'replay',
 		totalEvents,
 		currentEvents,
 		onPause,
@@ -13,6 +14,7 @@
 		progress: number;
 		paused: boolean;
 		speed: number;
+		mode?: 'live' | 'replay';
 		totalEvents: number;
 		currentEvents: number;
 		onPause: () => void;
@@ -21,13 +23,21 @@
 		onSkipToEnd: () => void;
 	} = $props();
 
+	const isLive = $derived(mode === 'live');
 	const progressPercent = $derived(Math.round(progress * 100));
 </script>
 
 <div class="playback-controls">
-	<div class="progress-bar">
-		<div class="progress-fill" style="width: {progressPercent}%"></div>
-	</div>
+	{#if isLive}
+		<div class="live-bar">
+			<span class="live-indicator">LIVE</span>
+			<div class="live-pulse"></div>
+		</div>
+	{:else}
+		<div class="progress-bar">
+			<div class="progress-fill" style="width: {progressPercent}%"></div>
+		</div>
+	{/if}
 
 	<div class="controls">
 		<button class="control-btn" onclick={() => paused ? onResume() : onPause()}>
@@ -38,25 +48,33 @@
 			{/if}
 		</button>
 
-		<div class="speed-control">
-			<span class="speed-label">Speed</span>
-			<input
-				type="range"
-				min="0.1"
-				max="20"
-				step="0.1"
-				value={speed}
-				oninput={(e) => onSetSpeed(parseFloat(e.currentTarget.value))}
-			/>
-			<span class="speed-value">{speed.toFixed(1)}x</span>
-		</div>
+		{#if !isLive}
+			<div class="speed-control">
+				<span class="speed-label">Speed</span>
+				<input
+					type="range"
+					min="0.1"
+					max="20"
+					step="0.1"
+					value={speed}
+					oninput={(e) => onSetSpeed(parseFloat(e.currentTarget.value))}
+				/>
+				<span class="speed-value">{speed.toFixed(1)}x</span>
+			</div>
+		{:else}
+			<div class="live-spacer"></div>
+		{/if}
 
 		<button class="control-btn skip-btn" onclick={onSkipToEnd}>
 			&#9654;&#9654;
 		</button>
 
 		<span class="event-counter">
-			{currentEvents} / {totalEvents} events
+			{#if isLive}
+				{currentEvents} events
+			{:else}
+				{currentEvents} / {totalEvents} events
+			{/if}
 		</span>
 	</div>
 </div>
@@ -82,6 +100,33 @@
 		background: var(--accent);
 		transition: width 0.15s;
 		border-radius: 2px;
+	}
+
+	.live-bar {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.live-indicator {
+		font-size: 0.65rem;
+		font-weight: 700;
+		letter-spacing: 0.1em;
+		color: #ef4444;
+	}
+
+	.live-pulse {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: #ef4444;
+		animation: pulse 1.5s ease-in-out infinite;
+	}
+
+	@keyframes pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.3; }
 	}
 
 	.controls {
@@ -144,6 +189,10 @@
 		color: var(--accent-light);
 		min-width: 3rem;
 		text-align: right;
+	}
+
+	.live-spacer {
+		flex: 1;
 	}
 
 	.event-counter {
