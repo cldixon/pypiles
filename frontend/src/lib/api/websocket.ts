@@ -27,12 +27,19 @@ export class GameWebSocket {
 			const msg: WSMessage = JSON.parse(event.data);
 
 			switch (msg.type) {
-				case 'game_setup':
+				case 'game_setup': {
 					this.reconnectAttempts = 0;
-					gameStore.setSetup(msg.payload as GameSetupPayload);
-					// Brief pause to show initial state, then start playback
-					setTimeout(() => gameStore.startPlaying(), 1200);
+					const setup = msg.payload as GameSetupPayload;
+					gameStore.setSetup(setup);
+					if (setup.mode === 'live') {
+						// Start immediately for live games
+						gameStore.startPlaying();
+					} else {
+						// Brief pause to show initial state, then start replay
+						setTimeout(() => gameStore.startPlaying(), 1200);
+					}
 					break;
+				}
 
 				case 'event_batch': {
 					const batch = msg.payload as EventBatchPayload;

@@ -33,13 +33,30 @@
 	}
 
 	.cards {
-		display: flex;
+		display: grid;
+		grid-template-columns: 1fr 1fr;
 		gap: 0.5rem;
-		justify-content: center;
-		flex-wrap: wrap;
+		max-width: 20rem;
+		margin: 0 auto;
 	}
 
 	.card-slot {
 		transition: transform 0.3s;
+	}
+
+	/* Fixed-size cards in center pile to prevent layout shifts */
+	.card-slot :global(.card) {
+		width: 9rem;
+		height: 3rem;
+		box-sizing: border-box;
+		justify-content: center;
+		align-items: center;
+		text-align: center;
+	}
+
+	.card-slot :global(.item) {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 </style>

@@ -13,7 +13,10 @@ wheels/
 logs/
 data/
 
+# Node
+node_modules/
+package-lock.json
+
 # Frontend
-frontend/node_modules/
 frontend/build/
 frontend/.svelte-kit/

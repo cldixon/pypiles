@@ -39,7 +39,8 @@ function mockSetup(): GameSetupPayload {
 				num_piles: 2
 			}
 		],
-		total_events: 20
+		total_events: 20,
+		mode: 'replay'
 	};
 }
 
