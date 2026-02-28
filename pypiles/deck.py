@@ -8,7 +8,7 @@ from pypiles.items import get_items
 
 class StandardConfigs:
     MIN_NUM_PLAYERS = 2
-    MAX_NUM_PLAYERS = 8
+    MAX_NUM_PLAYERS = 4
     NUM_PILES_PER_PLAYER = 6
     PILE_SIZE = 4
 
@@ -31,7 +31,7 @@ def prepare_game_cards(
         StandardConfigs.MIN_NUM_PLAYERS
         <= num_players
         <= StandardConfigs.MAX_NUM_PLAYERS
-    ), f"Selected number of player {num_players} is not valid. Game allows 2-8 players."
+    ), f"Selected number of player {num_players} is not valid. Game allows 2-4 players."
 
     # determine number of items needed based on game configs
     num_items_required = (

@@ -13,7 +13,7 @@ from pypiles.game import GameConfig, GameManager
 
 
 class CreateGameRequest(BaseModel):
-    num_players: int = Field(ge=2, le=8, default=2)
+    num_players: int = Field(ge=2, le=4, default=2)
     pile_size: int = Field(ge=2, le=10, default=4)
     num_piles_per_player: int = Field(ge=1, le=12, default=6)
     winning_score: int | None = None
@@ -129,7 +129,7 @@ async def list_characters():
 @app.get("/api/config-constraints")
 async def get_config_constraints():
     return {
-        "num_players": {"min": 2, "max": 8},
+        "num_players": {"min": 2, "max": 4},
         "pile_size": {"min": 2, "max": 10},
         "num_piles_per_player": {"min": 1, "max": 12},
         "product_constraint": "num_players * num_piles_per_player <= 49",
