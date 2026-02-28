@@ -61,7 +61,7 @@ describe('getCharacters', () => {
 
 describe('getConfigConstraints', () => {
 	it('returns constraint object', async () => {
-		const constraints = { num_players: { min: 2, max: 8 } };
+		const constraints = { num_players: { min: 2, max: 4 } };
 		mockFetch.mockResolvedValue({
 			ok: true,
 			json: async () => constraints

@@ -102,12 +102,12 @@
 					id="players"
 					type="range"
 					min="2"
-					max="8"
+					max="4"
 					bind:value={numPlayers}
 				/>
 				<div class="range-labels">
 					<span>2</span>
-					<span>8</span>
+					<span>4</span>
 				</div>
 			</div>
 

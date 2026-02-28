@@ -16,69 +16,29 @@
 	);
 </script>
 
-<div class="game-board" class:two-players={players.length === 2} class:many-players={players.length > 2}>
-	{#if players.length === 2}
-		<!-- 2-player layout: player - center - player -->
-		<div class="player-panel left">
+<div class="game-board">
+	<div class="center-top">
+		<CenterPile cards={state.centerPile} />
+	</div>
+
+	<div class="players-grid">
+		{#each players as player}
 			<PlayerHand
-				playerId={players[0].id}
-				piles={players[0].piles}
-				completed={players[0].completed}
-				score={players[0].score}
-				playerIndex={0}
+				playerId={player.id}
+				piles={player.piles}
+				completed={player.completed}
+				score={player.score}
+				playerIndex={player.index}
 			/>
-		</div>
-
-		<div class="center-panel">
-			<CenterPile cards={state.centerPile} />
-		</div>
-
-		<div class="player-panel right">
-			<PlayerHand
-				playerId={players[1].id}
-				piles={players[1].piles}
-				completed={players[1].completed}
-				score={players[1].score}
-				playerIndex={1}
-			/>
-		</div>
-	{:else}
-		<!-- 3+ player layout: center on top, players in grid below -->
-		<div class="center-top">
-			<CenterPile cards={state.centerPile} />
-		</div>
-
-		<div class="players-grid">
-			{#each players as player}
-				<PlayerHand
-					playerId={player.id}
-					piles={player.piles}
-					completed={player.completed}
-					score={player.score}
-					playerIndex={player.index}
-				/>
-			{/each}
-		</div>
-	{/if}
+		{/each}
+	</div>
 </div>
 
 <style>
-	.game-board.two-players {
-		display: grid;
-		grid-template-columns: 1fr auto 1fr;
-		gap: 1.5rem;
-		align-items: start;
-	}
-
-	.game-board.many-players {
+	.game-board {
 		display: flex;
 		flex-direction: column;
 		gap: 1.5rem;
-	}
-
-	.center-panel {
-		display: flex;
-		align-items: center;
 	}
 
 	.center-top {
@@ -90,15 +50,5 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 		gap: 1rem;
-	}
-
-	@media (max-width: 800px) {
-		.game-board.two-players {
-			grid-template-columns: 1fr;
-		}
-
-		.center-panel {
-			justify-content: center;
-		}
 	}
 </style>
