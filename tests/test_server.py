@@ -64,7 +64,7 @@ class TestConfigConstraints:
         assert resp.status_code == 200
         data = resp.json()
         assert data["num_players"]["min"] == 2
-        assert data["num_players"]["max"] == 8
+        assert data["num_players"]["max"] == 4
         assert data["pile_size"]["min"] == 2
         assert data["total_items"] == 50
         assert data["total_colors"] == 10
@@ -96,7 +96,7 @@ class TestCreateGame:
         assert resp.status_code == 200
         assert "game_id" in resp.json()
 
-    async def test_invalid_product_constraint(self, client):
+    async def test_invalid_num_players_rejected(self, client):
         resp = await client.post(
             "/api/games",
             json={
@@ -105,7 +105,7 @@ class TestCreateGame:
                 "num_piles_per_player": 12,
             },
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
     async def test_invalid_character(self, client):
         resp = await client.post(
